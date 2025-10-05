@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sky Trace - Asteroid Detection System</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary-color: #0ea5e9;
+    --secondary-color: #f43f5e;
+    --accent-color: #a855f7;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --bg-dark: #0f172a;
+    --bg-darker: #020617;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+  }
+  
+  body { 
+    margin: 0; 
+    font-family: 'Inter', sans-serif; 
+    background: var(--bg-darker); 
+    color: var(--text-primary); 
+    overflow: hidden;
+    transition: background 0.3s ease;
+  }
+  
+  .orbitron { font-family: 'Orbitron', monospace; }
+  canvas { display: block; }
+  .glass { 
+    background: rgba(15, 23, 42, 0.7); 
+    backdrop-filter: blur(16px); 
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+  #stars { position: fixed; width: 100%; height: 100%; z-index: -1; background: var(--bg-darker); }
+  .neon-text { text-shadow: 0 0 10px currentColor, 0 0 20px currentColor; }
+  .btn-danger { background: linear-gradient(135deg, var(--secondary-color), #dc2626); transition: all 0.3s ease; }
+  .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(244, 63, 94, 0.3); }
+  .control-input { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148, 163, 184, 0.2); transition: all 0.2s ease; }
+  .control-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1); outline: none; }
+  .slider { -webkit-appearance: none; appearance: none; height: 6px; background: rgba(148, 163, 184, 0.2); outline: none; }
+  .slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; background: var(--primary-color); cursor: pointer; border-radius: 50%; box-shadow: 0 0 10px rgba(14, 165, 233, 0.5); }
+  .section-title { position: relative; padding-left: 15px; margin-bottom: 15px; }
+  .section-title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 4px; height: 20px; background: var(--primary-color); border-radius: 2px; }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+  .console-line { font-family: 'Courier New', monospace; line-height: 1.5; padding: 2px 0; border-bottom: 1px solid rgba(148, 163, 184, 0.05); }
+  .status-indicator { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+  .status-active { background: var(--success-color); box-shadow: 0 0 5px var(--success-color); }
+  .sidebar-collapsed { transform: translateX(-100%); }
+  .sidebar-right-collapsed { transform: translateX(100%); }
+  .toggle-sidebar { position: absolute; top: 50%; transform: translateY(-50%); z-index: 15; width: 24px; height: 60px; display: flex; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(148, 163, 184, 0.2); cursor: pointer; transition: all 0.3s ease; }
+  .toggle-sidebar:hover { background: rgba(30, 41, 59, 0.9); }
+  .toggle-left { right: -24px; border-radius: 0 8px 8px 0; }
+  .toggle-right { left: -24px; border-radius: 8px 0 0 8px; }
+  .simulation-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(90vw, 90vh); height: min(90vw, 90vh); border-radius: 50%; overflow: hidden; box-shadow: 0 0 50px rgba(14, 165, 233, 0.3), inset 0 0 50px rgba(168, 85, 247, 0.1); }
+  .results-header { background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(168, 85, 247, 0.1)); border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid rgba(148, 163, 184, 0.1); }
+  .impact-card { background: rgba(30, 41, 59, 0.4); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid rgba(148, 163, 184, 0.1); transition: all 0.3s ease; animation: slideIn 0.5s ease-out; }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+  .impact-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); border-color: rgba(14, 165, 233, 0.3); }
+  .impact-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-right: 16px; flex-shrink: 0; }
+  .impact-icon.energy { background: linear-gradient(135deg, #f43f5e, #dc2626); }
+  .impact-icon.crater { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+  .impact-icon.seismic { background: linear-gradient(135deg, #10b981, #059669); }
+  .impact-icon.airburst { background: linear-gradient(135deg, #a855f7, #9333ea); }
+  .impact-icon.location { background: linear-gradient(135deg, #f59e0b, #d97706); }
+  .impact-value { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, var(--text-primary), var(--text-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .impact-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .progress-bar { height: 6px; background: rgba(148, 163, 184, 0.1); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width 1s ease-out; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .stat-item { background: rgba(15, 23, 42, 0.5); padding: 12px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.1); }
+  .stat-value { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+  .stat-label { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+  .severity-indicator { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .severity-critical { background: rgba(244, 63, 94, 0.2); color: #f87171; border: 1px solid rgba(244, 63, 94, 0.3); }
+  .severity-high { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .severity-medium { background: rgba(14, 165, 233, 0.2); color: #60a5fa; border: 1px solid rgba(14, 165, 233, 0.3); }
+  .severity-low { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+  .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-state-text { font-size: 14px; }
+  
+  /* Enhanced Map Styles */
+  .map-container { 
+    position: relative; 
+    width: 100%; 
+    height: 250px; 
+    border-radius: 12px; 
+    overflow: hidden; 
+    border: 1px solid rgba(14, 165, 233, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  
+  .map-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .map-control-btn {
+    width: 30px;
+    height: 30px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    border-radius: 4px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .map-control-btn:hover {
+    background: rgba(14, 165, 233, 0.3);
+    transform: scale(1.1);
+  }
+  
+  .map-info {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    border-radius: 4px;
+    padding: 5px 10px;
+    color: var(--text-primary);
+    font-size: 11px;
+    z-index: 1000;
+  }
+  
+  .map-layer-selector {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    border-radius: 4px;
+    padding: 5px;
+    z-index: 1000;
+  }
+  
+  .layer-option {
+    display: flex;
+    align-items: center;
+    padding: 3px 5px;
+    cursor: pointer;
+    border-radius: 2px;
+    font-size: 10px;
+    transition: background 0.2s ease;
+  }
+  
+  .layer-option:hover {
+    background: rgba(14, 165, 233, 0.2);
+  }
+  
+  .layer-option.active {
+    background: rgba(14, 165, 233, 0.3);
+    color: var(--primary-color);
+  }
+  
+  .layer-option input {
+    margin-right: 5px;
+  }
+  
+  .leaflet-container { 
+    background: #020617; 
+    font-family: 'Inter', sans-serif;
+  }
+  
+  .leaflet-control-zoom {
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  .leaflet-control-zoom a {
+    background: rgba(15, 23, 42, 0.8) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid rgba(14, 165, 233, 0.3) !important;
+  }
+  
+  .leaflet-control-zoom a:hover {
+    background: rgba(14, 165, 233, 0.3) !important;
+  }
+  
+  .leaflet-popup-content-wrapper {
+    background: rgba(15, 23, 42, 0.9) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid rgba(14, 165, 233, 0.3) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  .leaflet-popup-tip {
+    background: rgba(15, 23, 42, 0.9) !important;
+  }
+  
+  .leaflet-popup-content {
+    margin: 10px !important;
+    font-size: 12px !important;
+  }
+  
+  .impact-popup-title {
+    font-weight: 600;
+    color: var(--secondary-color);
+    margin-bottom: 5px;
+    font-family: 'Orbitron', monospace;
+  }
+  
+  .impact-popup-data {
+    display: flex;
+    justify-content: space-between;
+    margin: 3px 0;
+  }
+  
+  .impact-popup-label {
+    color: var(--text-secondary);
+  }
+  
+  .impact-popup-value {
+    font-weight: 500;
+  }
+  
+  .coordinate-grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 999;
+  }
+  
+  .coordinate-line {
+    position: absolute;
+    background: rgba(14, 165, 233, 0.1);
+  }
+  
+  .coordinate-line.horizontal {
+    width: 100%;
+    height: 1px;
+  }
+  
+  .coordinate-line.vertical {
+    width: 1px;
+    height: 100%;
+  }
+  
+  .map-legend {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    border-radius: 4px;
+    padding: 5px 10px;
+    color: var(--text-primary);
+    font-size: 10px;
+    z-index: 1000;
+  }
+  
+  .legend-item {
+    display: flex;
+    align-items: center;
+    margin: 3px 0;
+  }
+  
+  .legend-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+  }
+  
+  /* API Status Indicator */
+  .api-status {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    font-size: 11px;
+  }
+  .api-status.success {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: #34d399;
+  }
+  .api-status.error {
+    background: rgba(244, 63, 94, 0.1);
+    border: 1px solid rgba(244, 63, 94, 0.2);
+    color: #f87171;
+  }
+  .api-status.loading {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+  }
+  .loading-spinner {
+    border: 3px solid rgba(14, 165, 233, 0.1);
+    border-radius: 50%;
+    border-top: 3px solid var(--primary-color);
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    margin-right: 10px;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Detection Systems Styles */
+  .detection-systems {
+    margin-top: 10px;
+  }
+  .tab-container {
+    margin-top: 10px;
+  }
+  .tab-buttons {
+    display: flex;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  .tab-button {
+    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-button:hover {
+    color: var(--text-primary);
+  }
+  .tab-button.active {
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+  }
+  .tab-content {
+    display: none;
+  }
+  .tab-content.active {
+    display: block;
+  }
+  .detection-system {
+    background: rgba(30, 41, 59, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    transition: all 0.3s ease;
+  }
+  .detection-system:hover {
+    background: rgba(30, 41, 59, 0.5);
+    transform: translateY(-2px);
+  }
+  .detection-system-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .detection-system-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+  .detection-system-title {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .detection-system-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .detection-system-content {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+  .detection-system-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
+    margin-right: 4px;
+    margin-top: 4px;
+  }
+  .tag-satellite {
+    background: rgba(14, 165, 233, 0.2);
+    color: #60a5fa;
+  }
+  .tag-ground {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+  }
+  .tag-infrared {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+
+<header class="glass fixed top-0 left-0 w-full p-4 flex justify-between items-center z-20">
+  <h1 class="text-2xl font-bold text-white orbitron neon-text flex items-center">
+    Sky Trace
+  </h1>
+  <div class="flex items-center gap-4">
+    <div class="flex items-center">
+      <span class="status-indicator status-active"></span>
+      <span class="text-sm text-gray-400">System Active</span>
+    </div>
+  </div>
+</header>
+
+<aside id="leftSidebar" class="glass fixed top-16 left-0 w-72 h-[calc(100%-4rem)] p-4 flex flex-col gap-4 overflow-y-auto z-10 transition-transform duration-300">
+  <h2 class="text-lg text-blue-300 font-bold section-title">🛰 NEO Scenarios</h2>
+  
+  <!-- API Status Indicator -->
+  <div id="apiStatus" class="api-status loading">
+    <span class="loading-spinner"></span>
+    <span id="apiStatusText">Connecting to NASA API...</span>
+  </div>
+  
+  <div class="mb-2">
+    <label class="block text-sm text-gray-400 mb-2">Select a NEO Scenario:</label>
+    <div class="relative">
+      <select id="neoSelect" class="control-input p-2 rounded-lg w-full appearance-none">
+        <option value="">Loading Scenarios...</option>
+      </select>
+      <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="h-px bg-gray-700"></div>
+  
+  <h2 class="text-lg text-blue-300 font-bold section-title">⚙ Manual Simulation</h2>
+  <div class="space-y-4">
+    <div>
+      <div class="flex justify-between items-center mb-2"><label class="text-sm text-gray-400">Asteroid Size</label><span id="sizeValue" class="text-sm font-medium text-blue-400">500 m</span></div>
+      <input type="range" id="size" min="50" max="2000" value="500" class="slider w-full" />
+    </div>
+    <div>
+      <div class="flex justify-between items-center mb-2"><label class="text-sm text-gray-400">Velocity</label><span id="velocityValue" class="text-sm font-medium text-blue-400">20 km/s</span></div>
+      <input type="range" id="velocity" min="5" max="70" value="20" class="slider w-full" />
+    </div>
+    <div>
+      <div class="flex justify-between items-center mb-2"><label class="text-sm text-gray-400">Angle</label><span id="angleValue" class="text-sm font-medium text-blue-400">45°</span></div>
+      <input type="range" id="angle" min="10" max="90" value="45" class="slider w-full" />
+    </div>
+    <div>
+      <label class="block text-sm text-gray-400 mb-2">Composition</label>
+      <div class="relative">
+        <select id="composition" class="control-input p-2 rounded-lg w-full appearance-none">
+          <option>Rock</option><option>Iron</option><option>Ice</option>
+        </select>
+        <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none"><svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg></div>
+      </div>
+    </div>
+    <button id="simulate" class="btn-danger py-2 px-4 rounded-lg font-bold flex items-center justify-center"><span class="mr-2">🚀</span> Run Manual Simulation</button>
+  </div>
+  <div class="h-px bg-gray-700"></div>
+  
+  <!-- Detection Systems Section -->
+  <div class="detection-systems">
+    <div class="tab-container">
+      <div class="tab-buttons">
+        <button class="tab-button active" data-tab="systems">Detection Systems</button>
+        <button class="tab-button" data-tab="workflow">Data Workflow</button>
+      </div>
+      
+      <div id="systems" class="tab-content active">
+        <div class="detection-system">
+          <div class="detection-system-header">
+            <div class="detection-system-icon" style="background: linear-gradient(135deg, #0ea5e9, #0284c7);">
+              🛰️
+            </div>
+            <div>
+              <div class="detection-system-title">NEOWISE</div>
+              <div class="detection-system-subtitle">Near-Earth Object Wide-field Infrared Survey Explorer</div>
+            </div>
+          </div>
+          <div class="detection-system-content">
+            Space telescope that scans the skies in infrared light, detecting dark asteroids that don't reflect much sunlight but glow in infrared.
+          </div>
+          <div>
+            <span class="detection-system-tag tag-satellite">Satellite</span>
+            <span class="detection-system-tag tag-infrared">Infrared</span>
+          </div>
+        </div>
+        
+        <div class="detection-system">
+          <div class="detection-system-header">
+            <div class="detection-system-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+              🔭
+            </div>
+            <div>
+              <div class="detection-system-title">Pan-STARRS</div>
+              <div class="detection-system-subtitle">Panoramic Survey Telescope and Rapid Response System</div>
+            </div>
+          </div>
+          <div class="detection-system-content">
+            Located in Hawaii, one of the most prolific asteroid-hunting observatories in the world.
+          </div>
+          <div>
+            <span class="detection-system-tag tag-ground">Ground-based</span>
+          </div>
+        </div>
+      </div>
+      
+      <div id="workflow" class="tab-content">
+        <div class="detection-system">
+          <div class="detection-system-header">
+            <div class="detection-system-icon" style="background: linear-gradient(135deg, #a855f7, #9333ea);">
+              📡
+            </div>
+            <div>
+              <div class="detection-system-title">Step 1: Detection</div>
+              <div class="detection-system-subtitle">Observatories detect moving objects</div>
+            </div>
+          </div>
+          <div class="detection-system-content">
+            All observatories (NEOWISE and ground-based telescopes) scan the skies and detect objects that move against the background stars.
+          </div>
+        </div>
+        
+        <div class="detection-system">
+          <div class="detection-system-header">
+            <div class="detection-system-icon" style="background: linear-gradient(135deg, #a855f7, #9333ea);">
+              📊
+            </div>
+            <div>
+              <div class="detection-system-title">Step 2: Data Collection</div>
+              <div class="detection-system-subtitle">Minor Planet Center (MPC)</div>
+            </div>
+          </div>
+          <div class="detection-system-content">
+            Observations are sent to the Minor Planet Center, the official worldwide organization for collecting and cataloging this data.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="h-px bg-gray-700"></div>
+  <div class="flex-1 flex flex-col min-h-0">
+    <div class="flex justify-between items-center mb-2"><span class="text-green-400 font-bold flex items-center text-sm">🖥 Console Log</span><button id="clearConsole" class="px-2 py-0.5 bg-red-600 hover:bg-red-700 rounded text-white text-xs">Clear</button></div>
+    <div id="consoleLog" class="flex-grow overflow-y-auto text-xs text-green-300 font-mono p-2 bg-black/70 rounded-lg border border-gray-700"><div class="console-line">> System Ready...</div></div>
+  </div>
+  <div class="toggle-sidebar toggle-left" id="toggleLeftSidebar"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></div>
+</aside>
+
+<aside id="rightSidebar" class="glass fixed top-16 right-0 w-80 h-[calc(100%-4rem)] p-4 flex flex-col gap-4 overflow-y-auto z-10 transition-transform duration-300">
+  <div class="results-header">
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg text-yellow-300 font-bold flex items-center">📊 Impact Analysis</h2>
+      <div id="simulationStatus" class="severity-indicator severity-low">Ready</div>
+    </div>
+  </div>
+  <div id="resultsLog" class="space-y-2 text-sm flex-grow overflow-auto">
+    <div class="empty-state">
+      <div class="empty-state-icon">🌍</div>
+      <div class="empty-state-text">Select a scenario or run a manual simulation</div>
+    </div>
+  </div>
+  
+  <!-- Enhanced Map Container -->
+  <div class="map-container">
+    <div id="map" class="w-full h-full"></div>
+    
+    <!-- Map Layer Selector -->
+    <div class="map-layer-selector">
+      <div class="layer-option active" data-layer="satellite">
+        <input type="radio" name="mapLayer" value="satellite" checked>
+        <span>🛰️ Satellite</span>
+      </div>
+      <div class="layer-option" data-layer="terrain">
+        <input type="radio" name="mapLayer" value="terrain">
+        <span>🏔️ Terrain</span>
+      </div>
+      <div class="layer-option" data-layer="dark">
+        <input type="radio" name="mapLayer" value="dark">
+        <span>🌙 Dark</span>
+      </div>
+      <div class="layer-option" data-layer="street">
+        <input type="radio" name="mapLayer" value="street">
+        <span>🗺️ Street</span>
+      </div>
+    </div>
+    
+    <!-- Map Controls -->
+    <div class="map-controls">
+      <div class="map-control-btn" id="mapGridToggle" title="Toggle Grid">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+      </div>
+      <div class="map-control-btn" id="mapFullscreen" title="Fullscreen">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+        </svg>
+      </div>
+      <div class="map-control-btn" id="mapReset" title="Reset View">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+        </svg>
+      </div>
+    </div>
+    
+    <!-- Map Info -->
+    <div class="map-info">
+      <div>Lat: <span id="mapLat">0.00</span>°</div>
+      <div>Lng: <span id="mapLng">0.00</span>°</div>
+      <div>Zoom: <span id="mapZoom">2</span></div>
+    </div>
+    
+    <!-- Map Legend -->
+    <div class="map-legend">
+      <div class="legend-item">
+        <div class="legend-color" style="background: #f43f5e;"></div>
+        <span>Impact Site</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: rgba(244, 63, 94, 0.3);"></div>
+        <span>Blast Zone</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: rgba(245, 158, 11, 0.3);"></div>
+        <span>Shockwave</span>
+      </div>
+    </div>
+    
+    <!-- Coordinate Grid -->
+    <div class="coordinate-grid" id="coordinateGrid" style="display: none;">
+      <!-- Grid lines will be added dynamically -->
+    </div>
+  </div>
+  
+  <div class="toggle-sidebar toggle-right" id="toggleRightSidebar"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></div>
+</aside>
+
+<main class="absolute inset-0 flex items-center justify-center pointer-events-none">
+  <div class="simulation-container pointer-events-auto"><canvas id="sceneCanvas" class="w-full h-full"></canvas></div>
+</main>
+
+<script>
+// ===== OFFLINE DATA AND SETUP =====
+
+const OFFLINE_NEO_DATA = [
+  { name: "99942 Apophis", size: 370, velocity: 12.6, angle: 45, composition: "Rock", impactLocation: { lat: 20.5937, lng: 78.9629, name: "Central India" } },
+  { name: "101955 Bennu", size: 490, velocity: 28.0, angle: 60, composition: "Rock", impactLocation: { lat: 33.8869, lng: -116.5454, name: "Southern California" } },
+  { name: "65803 Didymos", size: 780, velocity: 17.9, angle: 35, composition: "Iron", impactLocation: { lat: -25.2744, lng: 133.7751, name: "Australian Outback" } },
+  { name: "433 Eros", size: 1680, velocity: 24.3, angle: 75, composition: "Iron", impactLocation: { lat: 4.2104, lng: 101.9758, name: "Malaysia" } }
+];
+
+const consoleLog = document.getElementById("consoleLog");
+const resultsLog = document.getElementById("resultsLog");
+const clearBtn = document.getElementById("clearConsole");
+const simulationStatus = document.getElementById("simulationStatus");
+const apiStatus = document.getElementById("apiStatus");
+const apiStatusText = document.getElementById("apiStatusText");
+const neoSelect = document.getElementById("neoSelect");
+
+let isUsingAPI = false;
+let apiData = [];
+let offlineData = [];
+
+// ===== CORE FUNCTIONS =====
+
+function logConsole(msg) {
+  const line = document.createElement("div");
+  line.className = "console-line";
+  line.innerHTML = `> ${msg}`;
+  consoleLog.appendChild(line);
+  consoleLog.scrollTop = consoleLog.scrollHeight;
+}
+
+function createImpactCard(config) {
+  const card = document.createElement('div');
+  card.className = `impact-card`;
+  
+  let statsHtml = '';
+  if (config.stats) {
+    statsHtml = `<div class="stats-grid">
+        ${config.stats.map(stat => `
+          <div class="stat-item">
+            <div class="stat-value">${stat.value}</div>
+            <div class="stat-label">${stat.label}</div>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+  
+  card.innerHTML = `
+    <div class="flex items-start">
+      <div class="impact-icon ${config.type}">${config.icon}</div>
+      <div class="flex-1">
+        <div class="impact-label">${config.title}</div>
+        <div class="impact-value">${config.value}</div>
+        <div class="text-xs text-gray-400 mt-1">${config.subtitle || ''}</div>
+        ${statsHtml}
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${config.progress}%; background-color: ${config.color};"></div>
+        </div>
+      </div>
+    </div>`;
+  return card;
+}
+
+function displayResults(impactData) {
+  resultsLog.innerHTML = ""; 
+
+  if (impactData.energy > 1000) {
+    simulationStatus.className = "severity-indicator severity-critical";
+    simulationStatus.textContent = "Critical";
+  } else if (impactData.energy > 100) {
+    simulationStatus.className = "severity-indicator severity-high";
+    simulationStatus.textContent = "High Risk";
+  } else if (impactData.energy > 10) {
+    simulationStatus.className = "severity-indicator severity-medium";
+    simulationStatus.textContent = "Medium";
+  } else {
+    simulationStatus.className = "severity-indicator severity-low";
+    simulationStatus.textContent = "Low";
+  }
+
+  const energyCard = createImpactCard({
+    type: 'energy', icon: '💥', title: 'Impact Energy', value: `${(impactData.energy / 1e6).toFixed(2)} MT`,
+    subtitle: 'Megatons of TNT', progress: Math.min(100, (impactData.energy / 5000) * 100), color: 'var(--secondary-color)'
+  });
+  
+  const craterCard = createImpactCard({
+    type: 'crater', icon: '🕳️', title: 'Crater Diameter', value: `${(impactData.size * 20).toFixed(0)} m`,
+    subtitle: 'Estimated simple crater size', progress: Math.min(100, (impactData.size / 2000) * 100), color: 'var(--primary-color)'
+  });
+
+  const seismicCard = createImpactCard({
+    type: 'seismic', icon: '📈', title: 'Seismic Magnitude', value: `M${(0.67 * Math.log10(impactData.energy * 4.184e12) - 2.9).toFixed(1)}`,
+    subtitle: 'Richter scale equivalent', progress: Math.min(100, ((0.67 * Math.log10(impactData.energy * 4.184e12) - 2.9) / 9) * 100), color: 'var(--warning-color)'
+  });
+
+  const locationCard = createImpactCard({
+    type: 'location', icon: '📍', title: 'Impact Coordinates', value: `${impactData.lat.toFixed(2)}°, ${impactData.lng.toFixed(2)}°`,
+    progress: 100, color: 'var(--success-color)',
+    stats: [{ label: 'Impact Location', value: impactData.locationName }]
+  });
+
+  resultsLog.appendChild(energyCard);
+  resultsLog.appendChild(craterCard);
+  resultsLog.appendChild(seismicCard);
+  resultsLog.appendChild(locationCard);
+}
+
+function runSimulation_WithLocation(neo) {
+    map.eachLayer(layer => { if (layer instanceof L.Marker || layer instanceof L.Circle) map.removeLayer(layer); });
+
+    let { size, velocity, angle, composition, impactLocation } = neo;
+    logConsole(`Simulating impact for ${neo.name} at ${impactLocation.name}`);
+
+    let E = calculateEnergy(size, velocity, composition);
+    
+    const impactData = { 
+        energy: E.TNT, 
+        size, angle, 
+        lat: impactLocation.lat, 
+        lng: impactLocation.lng,
+        locationName: impactLocation.name
+    };
+    displayResults(impactData);
+
+    // Enhanced impact visualization
+    const impactRadius = size * 100;
+    const blastRadius = size * 200;
+    const shockwaveRadius = size * 500;
+    
+    // Create custom impact marker
+    const impactIcon = L.divIcon({
+      className: 'custom-impact-marker',
+      html: `<div style="width: 20px; height: 20px; background: radial-gradient(circle, rgba(244, 63, 94, 0.8) 0%, rgba(244, 63, 94, 0) 70%); border-radius: 50%; animation: pulse 2s infinite;"></div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+    
+    L.marker([impactData.lat, impactData.lng], { icon: impactIcon }).addTo(map).bindPopup(createImpactPopup(neo)).openPopup();
+    
+    // Add multiple impact zones with different colors
+    L.circle([impactData.lat, impactData.lng], { 
+      radius: impactRadius, 
+      color: '#f43f5e', 
+      fillColor: '#f43f5e', 
+      fillOpacity: 0.4,
+      weight: 2
+    }).addTo(map);
+    
+    L.circle([impactData.lat, impactData.lng], { 
+      radius: blastRadius, 
+      color: '#f59e0b', 
+      fillColor: '#f59e0b', 
+      fillOpacity: 0.2,
+      weight: 1
+    }).addTo(map);
+    
+    L.circle([impactData.lat, impactData.lng], { 
+      radius: shockwaveRadius, 
+      color: '#0ea5e9', 
+      fillColor: '#0ea5e9', 
+      fillOpacity: 0.1,
+      weight: 1
+    }).addTo(map);
+    
+    map.setView([impactData.lat, impactData.lng], 5);
+}
+
+function createImpactPopup(neo) {
+  return `
+    <div class="impact-popup-title">💥 IMPACT DETECTED</div>
+    <div class="impact-popup-data">
+      <span class="impact-popup-label">Object:</span>
+      <span class="impact-popup-value">${neo.name}</span>
+    </div>
+    <div class="impact-popup-data">
+      <span class="impact-popup-label">Size:</span>
+      <span class="impact-popup-value">${neo.size.toFixed(1)}m</span>
+    </div>
+    <div class="impact-popup-data">
+      <span class="impact-popup-label">Velocity:</span>
+      <span class="impact-popup-value">${neo.velocity.toFixed(1)} km/s</span>
+    </div>
+    <div class="impact-popup-data">
+      <span class="impact-popup-label">Composition:</span>
+      <span class="impact-popup-value">${neo.composition}</span>
+    </div>
+  `;
+}
+
+function runSimulation_Manual() {
+    map.eachLayer(layer => { if (layer instanceof L.Marker || layer instanceof L.Circle) map.removeLayer(layer); });
+
+    let size = +document.getElementById("size").value;
+    let velocity = +document.getElementById("velocity").value;
+    let angle = +document.getElementById("angle").value;
+    let composition = document.getElementById("composition").value;
+
+    logConsole(`Simulating manual impact: size ${size}m, velocity ${velocity}km/s, angle ${angle}°`);
+
+    let E = calculateEnergy(size, velocity, composition);
+    let lat = Math.random() * 140 - 70;
+    let lng = Math.random() * 360 - 180;
+
+    const impactData = { energy: E.TNT, size, angle, lat, lng, locationName: "Random Location" };
+    displayResults(impactData);
+    
+    // Enhanced impact visualization for manual simulation
+    const impactRadius = size * 100;
+    const blastRadius = size * 200;
+    const shockwaveRadius = size * 500;
+    
+    const impactIcon = L.divIcon({
+      className: 'custom-impact-marker',
+      html: `<div style="width: 20px; height: 20px; background: radial-gradient(circle, rgba(244, 63, 94, 0.8) 0%, rgba(244, 63, 94, 0) 70%); border-radius: 50%; animation: pulse 2s infinite;"></div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+    
+    L.marker([lat, lng], { icon: impactIcon }).addTo(map).bindPopup(`
+      <div class="impact-popup-title">💥 MANUAL IMPACT</div>
+      <div class="impact-popup-data">
+        <span class="impact-popup-label">Size:</span>
+        <span class="impact-popup-value">${size}m</span>
+      </div>
+      <div class="impact-popup-data">
+        <span class="impact-popup-label">Velocity:</span>
+        <span class="impact-popup-value">${velocity}km/s</span>
+      </div>
+    `).openPopup();
+    
+    L.circle([lat, lng], { 
+      radius: impactRadius, 
+      color: '#f43f5e', 
+      fillColor: '#f43f5e', 
+      fillOpacity: 0.4,
+      weight: 2
+    }).addTo(map);
+    
+    L.circle([lat, lng], { 
+      radius: blastRadius, 
+      color: '#f59e0b', 
+      fillColor: '#f59e0b', 
+      fillOpacity: 0.2,
+      weight: 1
+    }).addTo(map);
+    
+    L.circle([lat, lng], { 
+      radius: shockwaveRadius, 
+      color: '#0ea5e9', 
+      fillColor: '#0ea5e9', 
+      fillOpacity: 0.1,
+      weight: 1
+    }).addTo(map);
+    
+    map.setView([lat, lng], 3);
+}
+
+function calculateEnergy(size, velocity, composition) {
+    let velocity_ms = velocity * 1000;
+    let comp = composition.toLowerCase();
+    let density = comp === "iron" ? 7800 : comp === "ice" ? 1000 : 3000;
+    let r = size / 2, vol = (4/3) * Math.PI * Math.pow(r, 3), mass = density * vol;
+    let energyJoules = 0.5 * mass * velocity_ms * velocity_ms;
+    let energyTNT = energyJoules / 4.184e9;
+    return { Joules: energyJoules, TNT: energyTNT };
+}
+
+// ===== NASA API FUNCTIONS =====
+
+async function fetchNEOFromAPI() {
+  // Using a working NASA API endpoint with proper key
+  const apiKey = 'DEMO_KEY';
+  const apiUrl = `https://api.nasa.gov/neo/rest/v1/neo/browse?api_key=${apiKey}&page=0&size=20`;
+  
+  try {
+    logConsole("Attempting to connect to NASA API...");
+    const response = await fetch(apiUrl);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    logConsole(`Successfully retrieved ${data.near_earth_objects.length} NEOs from NASA API`);
+    
+    return data.near_earth_objects.map(neo => {
+      // Extract real data from API
+      const diameter = neo.estimated_diameter.meters.estimated_diameter_max;
+      const velocity = neo.close_approach_data.length > 0 
+        ? parseFloat(neo.close_approach_data[0].relative_velocity.kilometers_per_second)
+        : 20; // Default if no approach data
+      
+      // Generate random but realistic impact location
+      const lat = (Math.random() * 140 - 70);
+      const lng = (Math.random() * 360 - 180);
+      
+      // Determine composition based on spectral data if available, otherwise random
+      let composition = 'Rock'; // Default
+      if (neo.orbital_data && neo.orbital_data.minimum_orbit_intersection) {
+        // Use orbital characteristics to estimate composition
+        const moi = parseFloat(neo.orbital_data.minimum_orbit_intersection);
+        if (moi < 0.05) composition = 'Iron'; // Likely metallic
+        else if (moi > 0.5) composition = 'Ice'; // Likely icy
+      }
+      
+      return {
+        name: neo.name,
+        size: diameter,
+        velocity: velocity,
+        angle: Math.floor(Math.random() * 80) + 10, // Random angle since API doesn't provide it
+        composition: composition,
+        impactLocation: {
+          lat: lat,
+          lng: lng,
+          name: `Location ${Math.abs(Math.floor(lat))}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(Math.floor(lng))}°${lng >= 0 ? 'E' : 'W'}`
+        },
+        hazardous: neo.is_potentially_hazardous_asteroid,
+        discovery: neo.orbital_data?.first_observation_date || 'Unknown'
+      };
+    });
+  } catch (error) {
+    console.error('API Error:', error);
+    logConsole(`API Error: ${error.message}`);
+    throw error;
+  }
+}
+
+// ===== DATA HANDLING =====
+
+async function initializeNEOData() {
+  logConsole("Initializing NEO database...");
+  
+  try {
+    // Try to fetch from NASA API first
+    logConsole("Connecting to NASA NEO API...");
+    apiData = await fetchNEOFromAPI();
+    isUsingAPI = true;
+    updateApiStatus('success', '✅ NASA API Connected');
+    logConsole(`Successfully loaded ${apiData.length} NEOs from NASA API`);
+    populateNEODropdown(apiData, true);
+  } catch (error) {
+    // Fallback to offline data if API fails
+    logConsole("API connection failed. Using offline data...");
+    isUsingAPI = false;
+    updateApiStatus('error', '❌ API Failed - Using Offline Data');
+    offlineData = OFFLINE_NEO_DATA;
+    logConsole(`Loaded ${offlineData.length} offline NEO scenarios`);
+    populateNEODropdown(offlineData, false);
+  }
+}
+
+function populateNEODropdown(data, isAPI) {
+  neoSelect.innerHTML = '<option value="">--- Select a Scenario ---</option>';
+  
+  // Sort NEOs by size (largest first)
+  const sortedNEOs = data.sort((a, b) => b.size - a.size);
+  
+  sortedNEOs.forEach((neo, index) => {
+    const option = document.createElement("option");
+    option.value = index;
+    
+    // Create display text with appropriate badges
+    let displayText = `${neo.name}`;
+    
+    if (isAPI) {
+      // API data badges
+      if (neo.hazardous) {
+        displayText += ' ⚠️';
+      }
+      displayText += ` (${neo.size.toFixed(1)}m, ${neo.velocity.toFixed(1)}km/s)`;
+    } else {
+      // Offline data badges
+      displayText += ` (${neo.size}m, ${neo.velocity}km/s)`;
+    }
+    
+    option.textContent = displayText;
+    neoSelect.appendChild(option);
+  });
+  
+  // Auto-select first NEO
+  if (sortedNEOs.length > 0) {
+    neoSelect.selectedIndex = 1;
+    updateFromNEO({ target: neoSelect });
+    logConsole(`${isAPI ? 'API' : 'Offline'} data ready - First NEO auto-selected`);
+  }
+}
+
+function updateFromNEO(event) {
+  const selectedIndex = event.target.value;
+  if (selectedIndex === "") return;
+
+  const data = isUsingAPI ? apiData : offlineData;
+  const neo = data[selectedIndex];
+  
+  if (neo) {
+    logConsole(`Selected NEO: ${neo.name}`);
+    
+    // Update simulation controls
+    document.getElementById("size").value = neo.size;
+    document.getElementById("sizeValue").innerText = `${neo.size.toFixed(1)} m`;
+    document.getElementById("velocity").value = neo.velocity;
+    document.getElementById("velocityValue").innerText = `${neo.velocity.toFixed(1)} km/s`;
+    document.getElementById("angle").value = neo.angle;
+    document.getElementById("angleValue").innerText = `${neo.angle}°`;
+    document.getElementById("composition").value = neo.composition;
+    
+    // Update asteroid appearance
+    updateAsteroidAppearance(neo.composition);
+    
+    // Run simulation with selected NEO
+    runSimulation_WithLocation(neo);
+  }
+}
+
+// Update API status display
+function updateApiStatus(status, message) {
+  apiStatus.className = `api-status ${status}`;
+  apiStatusText.innerHTML = message;
+}
+
+// Tab functionality for detection systems
+document.addEventListener('DOMContentLoaded', () => {
+  const tabButtons = document.querySelectorAll('.tab-button');
+  const tabContents = document.querySelectorAll('.tab-content');
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const tabId = button.getAttribute('data-tab');
+      
+      // Remove active class from all buttons and contents
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      tabContents.forEach(content => content.classList.remove('active'));
+      
+      // Add active class to clicked button and corresponding content
+      button.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    });
+  });
+  
+  initializeNEOData();
+});
+
+// ===== ENHANCED MAP FUNCTIONALITY =====
+
+let map;
+let currentLayer;
+let mapLayers = {};
+
+function initializeMap() {
+  // Initialize map
+  map = L.map("map", {
+    center: [20, 0],
+    zoom: 2,
+    zoomControl: false
+  });
+
+  // Define map layers
+  mapLayers = {
+    satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '© Esri',
+      maxZoom: 19
+    }),
+    terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenTopoMap',
+      maxZoom: 17
+    }),
+    dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap contributors © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }),
+    street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19
+    })
+  };
+
+  // Add default satellite layer
+  currentLayer = mapLayers.satellite;
+  currentLayer.addTo(map);
+
+  // Add custom zoom control
+  L.control.zoom({
+    position: 'topright'
+  }).addTo(map);
+
+  // Map event listeners
+  map.on('mousemove', (e) => {
+    document.getElementById("mapLat").textContent = e.latlng.lat.toFixed(2);
+    document.getElementById("mapLng").textContent = e.latlng.lng.toFixed(2);
+  });
+
+  map.on('zoomend', () => {
+    document.getElementById("mapZoom").textContent = map.getZoom();
+  });
+
+  // Layer selector functionality
+  document.querySelectorAll('.layer-option').forEach(option => {
+    option.addEventListener('click', () => {
+      const layerName = option.dataset.layer;
+      
+      // Update radio button
+      option.querySelector('input').checked = true;
+      
+      // Update active state
+      document.querySelectorAll('.layer-option').forEach(opt => opt.classList.remove('active'));
+      option.classList.add('active');
+      
+      // Switch layer
+      if (currentLayer) {
+        map.removeLayer(currentLayer);
+      }
+      currentLayer = mapLayers[layerName];
+      currentLayer.addTo(map);
+      
+      logConsole(`Map layer changed to: ${layerName}`);
+    });
+  });
+
+  // Map controls
+  document.getElementById('mapGridToggle').addEventListener('click', () => {
+    const grid = document.getElementById('coordinateGrid');
+    if (grid.style.display === 'none') {
+      grid.style.display = 'block';
+      drawCoordinateGrid();
+    } else {
+      grid.style.display = 'none';
+    }
+  });
+
+  document.getElementById('mapFullscreen').addEventListener('click', () => {
+    const mapContainer = document.querySelector('.map-container');
+    if (mapContainer.requestFullscreen) {
+      mapContainer.requestFullscreen();
+    }
+  });
+
+  document.getElementById('mapReset').addEventListener('click', () => {
+    map.setView([20, 0], 2);
+    logConsole("Map view reset");
+  });
+}
+
+function drawCoordinateGrid() {
+  const grid = document.getElementById('coordinateGrid');
+  grid.innerHTML = '';
+  
+  // Add horizontal lines
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const line = document.createElement('div');
+    line.className = 'coordinate-line horizontal';
+    line.style.top = `${((lat + 90) / 180) * 100}%`;
+    grid.appendChild(line);
+  }
+  
+  // Add vertical lines
+  for (let lng = -120; lng <= 120; lng += 60) {
+    const line = document.createElement('div');
+    line.className = 'coordinate-line vertical';
+    line.style.left = `${((lng + 180) / 360) * 100}%`;
+    grid.appendChild(line);
+  }
+}
+
+// ===== 3D SCENE AND ANIMATION =====
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({canvas:document.getElementById("sceneCanvas"), alpha:true, antialias: true});
+renderer.setSize(600, 600);
+renderer.setPixelRatio(window.devicePixelRatio);
+camera.position.set(0, 0, 3);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; 
+controls.dampingFactor = 0.05;
+
+// Add lights for realistic Earth
+scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+sunLight.position.set(5, 3, 5);
+scene.add(sunLight);
+
+// Add a second light to simulate reflection from the moon
+const moonLight = new THREE.DirectionalLight(0x404080, 0.2);
+moonLight.position.set(-5, -3, -5);
+scene.add(moonLight);
+
+// Create realistic Earth with texture
+const textureLoader = new THREE.TextureLoader();
+const earthGeometry = new THREE.SphereGeometry(1, 64, 64);
+
+// Load Earth textures with proper error handling
+let earthTexture, earthSpecularMap, earthNormalMap;
+let earthLoaded = false;
+
+function loadEarthTextures() {
+  const texturePromises = [
+    // Try to load from reliable sources
+    new Promise((resolve) => {
+      const loader = new THREE.TextureLoader();
+      loader.load(
+        'https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_atmos_2048.jpg',
+        (texture) => {
+          earthTexture = texture;
+          resolve();
+        },
+        undefined,
+        () => {
+          // Fallback to a solid color if texture fails to load
+          earthTexture = null;
+          resolve();
+        }
+      );
+    }),
+    new Promise((resolve) => {
+      const loader = new THREE.TextureLoader();
+      loader.load(
+        'https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_specular_2048.jpg',
+        (texture) => {
+          earthSpecularMap = texture;
+          resolve();
+        },
+        undefined,
+        () => {
+          earthSpecularMap = null;
+          resolve();
+        }
+      );
+    }),
+    new Promise((resolve) => {
+      const loader = new THREE.TextureLoader();
+      loader.load(
+        'https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_normal_2048.jpg',
+        (texture) => {
+          earthNormalMap = texture;
+          resolve();
+        },
+        undefined,
+        () => {
+          earthNormalMap = null;
+          resolve();
+        }
+      );
+    })
+  ];
+  
+  return Promise.all(texturePromises).then(() => {
+    createEarth();
+    earthLoaded = true;
+  });
+}
+
+function createEarth() {
+  // Create Earth material with loaded textures or fallback colors
+  const earthMaterial = new THREE.MeshPhongMaterial({
+    map: earthTexture,
+    specularMap: earthSpecularMap,
+    normalMap: earthNormalMap,
+    shininess: 5,
+    specular: new THREE.Color('grey')
+  });
+  
+  // If no texture loaded, use a solid blue color
+  if (!earthTexture) {
+    earthMaterial.color = new THREE.Color(0x2233ff);
+  }
+  
+  const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+  earth.position.set(0, 0, 0);
+  scene.add(earth);
+  
+  // Add cloud layer with texture
+  const cloudTexture = new THREE.TextureLoader().load(
+    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_clouds_1024.png',
+    (texture) => {
+      const cloudMaterial = new THREE.MeshPhongMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.3
+      });
+      const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.01, 64, 64), cloudMaterial);
+      clouds.position.set(0, 0, 0);
+      scene.add(clouds);
+    },
+    undefined,
+    () => {
+      // Fallback cloud layer if texture fails
+      const cloudMaterial = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.2
+      });
+      const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.01, 64, 64), cloudMaterial);
+      clouds.position.set(0, 0, 0);
+      scene.add(clouds);
+    }
+  );
+  
+  // Add atmospheric glow
+  const atmosphereGeometry = new THREE.SphereGeometry(1.1, 64, 64);
+  const atmosphereMaterial = new THREE.ShaderMaterial({
+    vertexShader: `
+      varying vec3 vNormal;
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vNormal;
+      void main() {
+        float intensity = pow(0.7 - dot(vNormal, vec3(0, 0, 1.0)), 2.0);
+        gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity;
+      }
+    `,
+    blending: THREE.AdditiveBlending,
+    side: THREE.BackSide,
+    transparent: true
+  });
+  
+  const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+  atmosphere.position.set(0, 0, 0);
+  scene.add(atmosphere);
+  
+  // Add city lights texture for night side
+  const cityLightsTexture = new THREE.TextureLoader().load(
+    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/planets/earth_lights_2048.png',
+    (texture) => {
+      const cityLightsMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        blending: THREE.AdditiveBlending,
+        transparent: true
+      });
+      const cityLights = new THREE.Mesh(earthGeometry, cityLightsMaterial);
+      cityLights.position.set(0, 0, 0);
+      scene.add(cityLights);
+    },
+    undefined,
+    () => {
+      // Fallback city lights if texture fails
+      const cityLightsMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffff00,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        opacity: 0.1
+      });
+      const cityLights = new THREE.Mesh(earthGeometry, cityLightsMaterial);
+      cityLights.position.set(0, 0, 0);
+      scene.add(cityLights);
+    }
+  );
+}
+
+// Create realistic asteroid with irregular shape and composition-based colors
+let asteroid, asteroidGroup, debrisField;
+
+function createRealisticAsteroid() {
+  // Create asteroid group to hold asteroid and debris
+  asteroidGroup = new THREE.Group();
+  
+  // Create irregular asteroid geometry
+  const asteroidGeometry = createAsteroidGeometry();
+  
+  // Default material (will be updated based on composition)
+  const asteroidMaterial = new THREE.MeshPhongMaterial({
+    color: 0x808080, // Default grey for rock
+    shininess: 5,
+    specular: new THREE.Color('grey')
+  });
+  
+  asteroid = new THREE.Mesh(asteroidGeometry, asteroidMaterial);
+  asteroidGroup.add(asteroid);
+  
+  // Add debris field around asteroid
+  createDebrisField();
+  
+  // Add glow effect
+  createAsteroidGlow();
+  
+  scene.add(asteroidGroup);
+  
+  return asteroidGroup;
+}
+
+function createAsteroidGeometry() {
+  // Create a more realistic irregular asteroid shape
+  const geometry = new THREE.SphereGeometry(0.1, 32, 32);
+  const positionAttribute = geometry.attributes.position;
+  const vertex = new THREE.Vector3();
+  
+  // Add random displacement to create irregular shape
+  for (let i = 0; i < positionAttribute.count; i++) {
+    vertex.fromBufferAttribute(positionAttribute, i);
+    
+    // Create craters and bumps
+    const displacement = 0.02 * Math.sin(i * 0.1) * Math.random();
+    const noise = 0.03 * Math.random();
+    vertex.normalize().multiplyScalar(0.1 + displacement + noise);
+    
+    positionAttribute.setXYZ(i, vertex.x, vertex.y, vertex.z);
+  }
+  
+  // Calculate new normals
+  geometry.computeVertexNormals();
+  
+  return geometry;
+}
+
+function createDebrisField() {
+  const debrisCount = 30;
+  const debrisGeometry = new THREE.BufferGeometry();
+  const debrisPositions = new Float32Array(debrisCount * 3);
+  const debrisColors = new Float32Array(debrisCount * 3);
+  const debrisSizes = new Float32Array(debrisCount);
+  
+  for (let i = 0; i < debrisCount; i++) {
+    // Random positions in a sphere around the asteroid
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const radius = 0.15 + Math.random() * 0.1;
+    
+    debrisPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+    debrisPositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+    debrisPositions[i * 3 + 2] = radius * Math.cos(phi);
+    
+    // Default colors (will be updated with composition)
+    debrisColors[i * 3] = 0.5;
+    debrisColors[i * 3 + 1] = 0.5;
+    debrisColors[i * 3 + 2] = 0.5;
+    
+    // Random sizes
+    debrisSizes[i] = Math.random() * 0.02 + 0.005;
+  }
+  
+  debrisGeometry.setAttribute('position', new THREE.BufferAttribute(debrisPositions, 3));
+  debrisGeometry.setAttribute('color', new THREE.BufferAttribute(debrisColors, 3));
+  debrisGeometry.setAttribute('size', new THREE.BufferAttribute(debrisSizes, 1));
+  
+  const debrisMaterial = new THREE.PointsMaterial({
+    size: 0.02,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending
+  });
+  
+  debrisField = new THREE.Points(debrisGeometry, debrisMaterial);
+  asteroidGroup.add(debrisField);
+}
+
+function createAsteroidGlow() {
+  const glowGeometry = new THREE.SphereGeometry(0.12, 16, 16);
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x808080, // Default grey
+    transparent: true, 
+    opacity: 0.3
+  });
+  
+  const asteroidGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+  asteroidGroup.add(asteroidGlow);
+  
+  return asteroidGlow;
+}
+
+function updateAsteroidAppearance(composition) {
+  if (!asteroid) return;
+  
+  const material = asteroid.material;
+  const glowMaterial = asteroidGroup.children.find(child => child.geometry && child.geometry.type === "SphereGeometry" && child.material.transparent)?.material;
+  
+  // Get composition-based colors
+  const colors = getCompositionColors(composition);
+  
+  // Update asteroid material
+  material.color.setHex(colors.main);
+  material.specular = new THREE.Color(colors.specular);
+  material.shininess = colors.shininess;
+  
+  // Update glow
+  if (glowMaterial) {
+    glowMaterial.color.setHex(colors.glow);
+  }
+  
+  // Update debris colors
+  if (debrisField) {
+    const debrisColors = debrisField.geometry.attributes.color.array;
+    for (let i = 0; i < debrisColors.length / 3; i++) {
+      // Add some variation to debris colors
+      const variation = 0.2;
+      const r = Math.max(0, Math.min(1, colors.debris.r + (Math.random() - 0.5) * variation));
+      const g = Math.max(0, Math.min(1, colors.debris.g + (Math.random() - 0.5) * variation));
+      const b = Math.max(0, Math.min(1, colors.debris.b + (Math.random() - 0.5) * variation));
+      
+      debrisColors[i * 3] = r;
+      debrisColors[i * 3 + 1] = g;
+      debrisColors[i * 3 + 2] = b;
+    }
+    debrisField.geometry.attributes.color.needsUpdate = true;
+  }
+  
+  logConsole(`Asteroid composition changed to: ${composition}`);
+}
+
+function getCompositionColors(composition) {
+  const comp = composition.toLowerCase();
+  
+  switch(comp) {
+    case 'iron':
+      return {
+        main: 0x8B4513, // Brown
+        specular: 0xD2691E, // Light brown
+        glow: 0x8B4513,
+        debris: { r: 0.545, g: 0.271, b: 0.075 }, // Brown
+        shininess: 30
+      };
+    case 'ice':
+      return {
+        main: 0x87CEEB, // Sky blue
+        specular: 0xFFFFFF, // White
+        glow: 0x87CEEB,
+        debris: { r: 0.529, g: 0.808, b: 0.922 }, // Sky blue
+        shininess: 80
+      };
+    case 'rock':
+    default:
+      return {
+        main: 0x808080, // Grey
+        specular: 0xA9A9A9, // Dark grey
+        glow: 0x808080,
+        debris: { r: 0.502, g: 0.502, b: 0.502 }, // Grey
+        shininess: 5
+      };
+  }
+}
+
+// Initialize 3D scene
+const asteroidObj = createRealisticAsteroid();
+loadEarthTextures();
+
+function animate(){
+  requestAnimationFrame(animate);
+  
+  // Only animate if Earth is loaded
+  if (earthLoaded) {
+    const earth = scene.children.find(child => child.geometry && child.geometry.type === "SphereGeometry" && child.position.x === 0);
+    if (earth) {
+      earth.rotation.y += 0.0005;
+    }
+    
+    const clouds = scene.children.find(child => 
+      child.geometry && child.geometry.type === "SphereGeometry" && 
+      child.position.x === 0 && 
+      child.material && child.material.transparent && child.material.opacity < 0.5
+    );
+    if (clouds) {
+      clouds.rotation.y += 0.0007;
+    }
+  }
+  
+  // Animate asteroid group
+  if (asteroidGroup) {
+    // Tumbling motion
+    asteroid.rotation.x += 0.002;
+    asteroid.rotation.y += 0.003;
+    asteroid.rotation.z += 0.001;
+    
+    // Animate debris field
+    if (debrisField) {
+      const time = Date.now() * 0.0005;
+      const positions = debrisField.geometry.attributes.position.array;
+      
+      for (let i = 0; i < positions.length / 3; i++) {
+        const i3 = i * 3;
+        const x = positions[i3];
+        const y = positions[i3 + 1];
+        const z = positions[i3 + 2];
+        
+        // Make particles orbit around the asteroid
+        const angle = time + i * 0.1;
+        const radius = Math.sqrt(x * x + y * y + z * z);
+        
+        positions[i3] = radius * Math.sin(angle) * Math.cos(i * 0.2);
+        positions[i3 + 1] = radius * Math.sin(angle) * Math.sin(i * 0.2);
+        positions[i3 + 2] = radius * Math.cos(angle);
+      }
+      
+      debrisField.geometry.attributes.position.needsUpdate = true;
+    }
+    
+    // Orbital motion around Earth
+    const orbitTime = Date.now() * 0.0005;
+    const radius = 2.5 - (orbitTime % 100) * 0.01; // Gradually getting closer to Earth
+    asteroidGroup.position.x = Math.cos(orbitTime) * radius;
+    asteroidGroup.position.z = Math.sin(orbitTime) * radius;
+    asteroidGroup.position.y = Math.sin(orbitTime * 0.5) * 0.5; // Add some vertical movement
+  }
+  
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// ===== UI AND EVENT LISTENERS =====
+
+const sliders=["size","velocity","angle"];
+sliders.forEach(id=>{
+  const unit = id === "size" ? "m" : id === "velocity" ? "km/s" : "°";
+  document.getElementById(id).oninput=e=>{ document.getElementById(`${id}Value`).innerText = `${e.target.value} ${unit}`; };
+});
+
+clearBtn.onclick = () => { consoleLog.innerHTML = '<div class="console-line">> Console cleared...</div>'; };
+document.getElementById("toggleLeftSidebar").onclick = () => document.getElementById("leftSidebar").classList.toggle("sidebar-collapsed");
+document.getElementById("toggleRightSidebar").onclick = () => document.getElementById("rightSidebar").classList.toggle("sidebar-right-collapsed");
+
+// Add composition change listener
+document.getElementById("composition").addEventListener("change", (e) => {
+  updateAsteroidAppearance(e.target.value);
+});
+
+const starCanvas = document.getElementById("stars");
+const ctx = starCanvas.getContext("2d");
+let stars = [];
+function setupStars() {
+    starCanvas.width = window.innerWidth;
+    starCanvas.height = window.innerHeight;
+    stars = Array(800).fill().map(() => ({ x: Math.random() * starCanvas.width, y: Math.random() * starCanvas.height, size: Math.random() * 2, brightness: Math.random() }));
+}
+function drawStars() {
+  ctx.fillStyle = "var(--bg-darker)";
+  ctx.fillRect(0, 0, starCanvas.width, starCanvas.height);
+  stars.forEach(star => {
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness})`;
+    ctx.fill();
+  });
+}
+
+window.addEventListener('resize', () => {
+    setupStars();
+    drawStars();
+    const size = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.9);
+    renderer.setSize(size, size);
+    camera.aspect = 1;
+    camera.updateProjectionMatrix();
+});
+
+// ===== EVENT LISTENERS =====
+neoSelect.addEventListener("change", updateFromNEO);
+document.getElementById("simulate").onclick = runSimulation_Manual;
+
+// ===== INITIALIZATION =====
+window.onload = () => { 
+  logConsole("Sky Trace System Ready. Connecting to data sources...");
+  setupStars();
+  drawStars();
+  
+  // Initialize map
+  initializeMap();
+  
+  // Set initial asteroid appearance
+  updateAsteroidAppearance('Rock');
+  
+  runSimulation_Manual(); // Run one initial random simulation
+};
+</script> 
+</body>
+</html>
